@@ -1,0 +1,278 @@
+---
+title: "35_sok_2008_h23_utf1"
+format: pdf
+editor: visual
+echo: false
+---
+
+```{r}
+#Laster inn pakker
+library(tidyverse)
+library(eurostat)
+library(ggplot2)
+library(dplyr)
+library(httr)
+library(PxWebApiData)
+library(rjstat)
+library(readr)
+library(magick)
+```
+
+### OPPGAVE 1.1
+
+```{r}
+#Henter data via json-spørring
+url <- "https://data.ssb.no/api/v0/no/table/04544/"
+
+query <- '{
+  "query": [
+    {
+      "code": "Kjonn",
+      "selection": {
+        "filter": "item",
+        "values": [
+          "1",
+          "2"
+        ]
+      }
+    },
+    {
+      "code": "Yrkesstatus",
+      "selection": {
+        "filter": "item",
+        "values": [
+          "00"
+        ]
+      }
+    },
+    {
+      "code": "ContentsCode",
+      "selection": {
+        "filter": "item",
+        "values": [
+          "Sysselsatte",
+          "FaktiskArbeidstid"
+        ]
+      }
+    }
+  ],
+  "response": {
+    "format": "json-stat2"
+  }
+}'
+
+hent_indeks.tmp <- url %>%
+  POST(body = query, encode = "json")
+
+df_ssb <-  hent_indeks.tmp %>%
+  content("text") %>%
+  fromJSONstat() %>%
+  as_tibble()
+
+df_ssb <- df_ssb[, -2]
+```
+
+```{r}
+#Filtrer statistikkvariabel og lager plott
+df_ssb_sysselsatt <- df_ssb %>%
+  filter(statistikkvariabel == "Sysselsatte i alt (1 000 personer)")
+
+ggplot(df_ssb_sysselsatt, aes(x = år, y = value, color = kjønn, group = kjønn)) +
+  geom_line(size = 1) +
+  geom_point(size = 3) +
+  labs(x = "År", y = "Totalt sysselsatte i 1000") +
+  scale_color_manual(values = c("Menn" = "blue", "Kvinner" = "red"),
+                     labels = c("Menn", "Kvinner"),
+                     breaks = c("Menn", "Kvinner")) +
+  theme_minimal() +
+  theme(legend.title = element_blank()) +
+  theme(legend.position = c(0.55, 0.8)) +  #Justere legend posisjon
+  scale_x_discrete(breaks = seq(min(df_ssb_sysselsatt$år), max(df_ssb_sysselsatt$år), by = 5)) +  #Juster nivåene på x-aksen
+  guides(color = guide_legend(override.aes = list(size = 3)))  # Adjust legend symbol size
+```
+
+```{r}
+#Samme, bare filtrerer for den andre statistikkvariabelen
+df_ssb_timeverk <- df_ssb %>%
+  filter(statistikkvariabel == "Faktisk arbeidstid (timer per uke)")
+
+ggplot(df_ssb_timeverk, aes(x = år, y = value, color = kjønn, group = kjønn)) +
+  geom_line(size = 1) +
+  geom_point(size = 3) +
+  labs(x = "År", y = "Faktisk utførte timeverk") +
+  scale_color_manual(values = c("Menn" = "blue", "Kvinner" = "red"),
+                     labels = c("Menn", "Kvinner"),
+                     breaks = c("Menn", "Kvinner")) +
+  theme_minimal() +
+  theme(legend.title = element_blank()) +
+  theme(legend.position = c(0.55, 0.5)) +  
+  scale_x_discrete(breaks = seq(min(df_ssb_sysselsatt$år), max(df_ssb_sysselsatt$år), by = 5)) +  
+  guides(color = guide_legend(override.aes = list(size = 3)))
+```
+
+Fra disse to figurene kan en se at antall sysselsatte har fulgt hverandre nokså tritt, men andelen men det har alltid vært en større andel menn i arbeidsstyrken enn kvinner. Historisk kan det forklares med tradisjonelle kjønnsroller i enkelte samfunn og kvinnens større ansvar for omsorgsoppgaver som det å ta vare på barn eller eldre. Om samfunnet da ikke tilbyr nok hjelp som for eksempel barnehageplass eller offentlig eldreomsorg, kan det i dette tilfellet bety at kvinnen kanskje må ta en lavere stillingsprosent fordi de har mindre tid.
+
+En kan se på den siste figuren at antall faktisk utførte timeverk har stått rimelig stabilt gjennom årene. Dette kan ha med at antall deltidsstillinger har økt betraktelig sammen med andel kvinner som deltar i arbeidsstyrken (NOU 2021).
+
+```{r}
+url_permisjon <- "https://github.com/uit-sok-2008-h23/uit-sok-2008-h23.github.io/raw/main/assets/women.csv"
+
+#Leser csv fil
+df_permisjon <- read.csv(url_permisjon, sep = ";")
+
+df_permisjon_02 <- df_permisjon[,-4] #fjerner 4 kolonne
+
+ggplot(df_permisjon, aes(x = tot_full_rate, y = fem_emp_rate_0_2,
+                         color = country)) +
+  geom_point() +
+  geom_text(aes(label = country), hjust = 0, vjust = 0) +
+  theme_minimal() +
+  theme(legend.position = "none") + 
+  labs(x = "Uker med fullpensjon", 
+       y = "Sysselsettingsgrad kvinner (Barn 0-2år)",
+       title = "Uker med fullpensjon mot sysselsettingsgrad med yngre barn")
+```
+
+```{r}
+df_permisjon_6_14 <- df_permisjon[,-3] #Fjerner tredje kolonne
+
+ggplot(df_permisjon, aes(x = tot_full_rate, y = fem_emp_rate_6_14,
+                         color = country)) +
+  geom_point() +
+  geom_text(aes(label = country), hjust = 0, vjust = 0) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  labs(x = "Uker med fullpensjon",
+       y = "Sysselsettingsgrad kvinner (Barn 6-14år)",
+       title = "Uker med fullpensjon mot sysselsettingsgrad med eldre barn")
+```
+
+-    «Gunstige permisjonsordninger ved fødsel sikrer høy yrkesdeltakelse blant kvinner på lang sikt».
+
+Hensikten med foreldrepermisjonen er å øke kvinners yrkesdeltakelse og samtidig legge til rette for en bedre balanse mellom arbeid og familieliv, samt en enklere vei tilbake til arbeidslivet etter endt permisjon. Denne ordningen betraktes som et effektivt verktøy for å utfordre den gamle og utdaterte kjønnsdelingen i samfunnet. Betalt fødselspermisjon for kvinner ble innført i 1977, og året etter ble den utvidet for å inkludere fedre. Gjennom årene har det vært noen få endringer fra ulike regjeringer for å forbedre forholdene for kvinner som tar ut permisjon. En betydelig del av permisjonen kan nå deles med faren, med begrunnelse i at fedre også skal ha en sterk rolle i omsorgen for barnet.
+
+Dataene som ligger til grunn for diagrammene, inneholder ingen informasjon om hvorvidt mødrene arbeider på deltid eller heltid. Det er bare to kategorier: i arbeidsstyrken eller ikke. Det vises ikke om stillingsprosenten endres for kvinner etter at fødselspermisjonen er avsluttet. Dersom situasjonen er slik at flere mødre som vender tilbake fra permisjonen blir plassert i deltidsstillinger, vil dette kunne ha en negativ innvirkning på flere viktige likestillingsindikatorer. Dette kan føre til tap av økonomisk uavhengighet og frihet for mødrene. Sett fra et likestillingsperspektiv kan dette være en ulempe med foreldrepermisjonsordningen, og det er viktig å undersøke i hvilken grad mødrene vender tilbake til heltids- eller deltidsstillinger og om dette kan føre til diskriminering i ansettelsesprosessen.
+
+Basert på de ovennevnte diagrammene viser dataene en negativ sammenheng mellom varigheten av foreldrepermisjon og kvinners yrkesdeltakelse når barnet er mellom 0 og 2 år. Imidlertid er det en positiv sammenheng når barnet er mellom 6 og 14 år, og på lang sikt ser det ut til at mødrene vender tilbake til arbeidslivet. I land som har gunstige permisjonsordninger og gir mulighet for omsorg for nyfødte barn, vil flertallet av mødrene naturligvis velge å være hjemme. På den annen side kan mødre i land uten slike ordninger oppleve økonomiske utfordringer og bli tvunget tilbake til arbeidslivet. Basert på de tidligere nevnte diagrammene, ser det ut til at en gunstig permisjonsordning kan sikre en relativt høy yrkesdeltakelse blant kvinner på lang sikt. Dette synes godt ved land som Ungarn og Estland. Dataene gir imidlertid ikke nok informasjon til å fastslå om mødrene vender tilbake til heltids- eller deltidsstillinger.
+
+*Forklar hvorfor høy yrkesdeltakelse blant norske kvinner og høye barnetall er viktig for at den norske velferdsmodellen skal være økonomisk bærekraftig.*
+
+Høy yrkesdeltakelse for både kvinner og menn utgjør en sentral byggestein i den norske velferdsmodellen. Historisk sett har det vært en høyere andel menn enn kvinner i arbeidsstyrken. På 1970-tallet begynte kvinners yrkesaktivitet å øke. Imidlertid har kvinners tilknytning til arbeidsmarkedet i større grad enn menns vært preget av deltidsansettelser. I 1980 var 53% av kvinnene deltidsansatt, mens i 2020 jobbet omtrent 35% av kvinnene (i alderen 20-66 år) deltid (SSB). For å styrke robustheten til velferdsmodellen, er det nødvendig med høy yrkesdeltakelse blant kvinner.
+
+En annen viktig søyle i den norske velferdsmodellen er inntektene fra skatter og avgifter (Økonomisk styring). Derfor vil antallet sysselsatte i befolkningen naturligvis ha en betydelig innvirkning, og høye nok barnetall være avgjørende for at modellen skal kunne opprettholdes på lang sikt. Likestilling er en kjerneverdi i de vestlige landene, spesielt i de nordiske landene. Ifølge FN er det en sterk sammenheng mellom likestilling mellom kjønnene i et land og dets økonomiske utvikling (FN). Norge har imidlertid en høyere yrkesdeltakelse blant kvinner og mindre kjønnsbasert arbeidsfordeling sammenlignet med mange andre land.
+
+Høy yrkesdeltakelse blant norske kvinner er ikke bare viktig for den økonomiske bærekraften til den norske velferdsmodellen, men også for å bevare og utvikle norske verdier og holdninger knyttet til likestilling for kommende generasjoner. Kvinner bringer ulike perspektiver og mangfold til samfunnet, noe som er avgjørende for samfunnets utvikling. En lavere yrkesdeltakelse blant kvinner i EU-landene fører til betydelige økonomiske tap. Ifølge Eurofond-rapporten fra 2016 fører dette til et årlig økonomisk tap på 3,3 billioner euro for EU-landene (Arbeidslivet, 2016). Rapporten anslår at hver kvinne som ikke er i arbeid, koster samfunnet mellom 10-18 millioner kroner i løpet av livet. En løsere tilknytning til arbeidsmarkedet kan også påvirke individets helse, da inntektene har betydning for sykepenger, pensjon, følelsen av medbestemmelse i samfunnet og den enkeltes økonomiske frihet. Økte helseutgifter på grunn av økt sykdom kan også påvirke velferdsmodellen ved å øke samfunnskostnadene og behovet for finansiering.
+
+### 
+OPPGAVE 1.2
+
+```{r}
+#Henter eurostat-datasett
+ df_eurostat <- get_eurostat("hlth_sha11_hf",
+                             type = "label",
+                             time_format = "num")
+ colnames(df_eurostat) <- c("unit",
+                            "scheme",
+                            "geo",
+                            "year",
+                            "value") #Endrer kolonnenavn
+```
+
+```{r}
+#Filtrerer de verdiene jeg vil ha med
+df_eurostat <- df_eurostat %>%
+   filter(year == "2019" &
+          (unit == "Percentual share of total current health expenditure (CHE)" |
+           unit == "Purchasing power standard (PPS) per inhabitant") &
+          (scheme == "All financing schemes" | 
+           scheme == "Household out-of-pocket payment"))
+
+ 
+```
+
+```{r}
+df_eurostat <- df_eurostat %>% #De jeg ikke vil ha med
+  filter(!((unit == "Percentual share of total current health expenditure (CHE)" &
+            scheme == "All financing schemes") | 
+           (unit == "Purchasing power standard (PPS) per inhabitant" &
+            scheme == "Household out-of-pocket payment")))
+```
+
+```{r}
+df_eurostat <- df_eurostat %>%
+  filter(!(geo == "Euro area - 12 countries (2001-2006)")) %>%
+  filter(!(geo == "Euro area - 18 countries (2014)" )) %>%
+  filter(!(geo == "Euro area - 19 countries  (2015-2022)")) %>%
+  filter(!(geo == "Euro area – 20 countries (from 2023)")) %>%
+  filter(!(geo == "European Union - 15 countries (1995-2004)")) %>%
+  filter(!(geo == "European Union - 27 countries (2007-2013)")) %>%
+  filter(!(geo == "European Union - 27 countries (from 2020)")) %>%
+  filter(!(geo == "European Union - 28 countries (2013-2020)")) %>%
+  filter(!(geo == "Bosnia and Herzegovina")) %>%
+  filter(!(geo == "Liechtenstein")) #Tungvint, men gjør jobben
+```
+
+```{r}
+df_eurostat_wider <- df_eurostat %>%
+  pivot_wider(names_from = unit, values_from = value) #Pivoterer wide
+```
+
+```{r}
+df_eurostat_widerall <- df_eurostat_wider %>%
+  pivot_wider(names_from = scheme,
+              values_from = `Purchasing power standard (PPS) per inhabitant`) 
+```
+
+```{r}
+df_eurostat_widerall <- df_eurostat_widerall[, -4]
+```
+
+```{r}
+df_test <- df_eurostat_widerall %>%
+  arrange(geo) # Sort the data frame by 'geo' column for alignment
+
+```
+
+```{r}
+df_wide_washed <- df_test %>% #Gjør det til et rent datasett
+  pivot_wider(
+    names_from = year,
+    values_from = c("Percentual share of total current health expenditure (CHE)", "All financing schemes")
+  ) %>%
+  unnest(cols = starts_with("Percentual share of total current health expenditure (CHE)")) %>%
+  unnest(cols = starts_with("All financing schemes")) %>%
+  filter(complete.cases(.))
+```
+
+```{r}
+colnames(df_wide_washed) <- c("country", "percentual_share",
+                              "total_finance")
+
+df_wide_washed <- df_wide_washed %>%
+  mutate(share_of_total = (percentual_share/100)*total_finance) #Ny kolonne
+#Hadde kanskje ikke trengt dette, men trodde først x-aksen skulle være en andel og ikke prosentandel
+```
+
+```{r}
+df_wide_washed %>%
+  ggplot(aes(x = percentual_share, y = total_finance, color = country)) +
+  geom_point() +
+  geom_text(aes(label = country), hjust = 0, vjust = 0) + 
+  labs(x = "Household out-of-pocket payment (%)",
+       y = "Purchasing power standard per inhabitant",
+       title = "Scatterplot of Household Out-of-Pocket Payment vs. Purchasing Power") +
+  theme_minimal() +
+  theme(legend.position = "none")  #Gjemme legends
+```
+
+Sammenhengen mellom variablene kan sees som en avveining mellom å gi tilgang til helsetjenester for alle og å opprettholde en bærekraftig økonomisk modell for helsetjenesten.
+
+Ved høy kjøpekraft og lav egenandel har innbyggere høy villighet til å søke medisinsk hjelp når de trenger det, men det kan på den andre siden bidra til lange køer og et rovbruk av helsetjenesten når folk har så lett tilgang.
+
+Ved lav kjøpekraft og høy egenandel vil folk kvie seg til å ta til seg medisinsk hjelp, rett og slett fordi det koster for mye. Dette kan bidra til at kun de som har best økonomi vil ta seg råd til medisinsk hjelp.
+
+Fra dette plottet kan en se at jo større egenandel innbyggere i landet bruker på helsetjenester, jo mindre kjøpekraft har de. Nordvestlige land i Europa ser ut til å ha relativt lavere egenandeler og også høyere kjøpekraft, mens de øst-europeiske landene har høye egenandeler og lav kjøpekraft. Her kan folk som trenger det, gå glipp av essensiell medisinsk hjelp.
+
+#### Fordelingseffekter ved økte egenandeler
+
+Ved økte egenandeler vil de som har lavest betalingsvillighet slite med å ta seg råd til medisinsk hjelp. Det er også ofte disse som har mest behov for hjelp, dermed kan økte egenandeler ha uheldige fordelingseffekter. De med høy betalingsvillighet vil ikke slite nevneverdig og vil kanskje få mindre kø fordi færre som ønsker å betale. Altså det gagner bare de som var best stilt fra før av.
